@@ -1,91 +1,114 @@
 require File.expand_path('../../spec_helper', __FILE__)
 
-describe "Tagger" do
+describe "tagger" do
   before(:each) do
     clean_database!
-    @user = TaggableUser.create
-    @taggable = TaggableModel.create(:name => "Bob Jones")
-  end
-
-  it "should have taggings" do
-    @user.tag(@taggable, :with=>'ruby,scheme', :on=>:tags)
-    @user.owned_taggings.size == 2
-  end
-
-  it "should have tags" do
-    @user.tag(@taggable, :with=>'ruby,scheme', :on=>:tags)
-    @user.owned_tags.size == 2
   end
   
-  it "should not overlap tags from different taggers" do
-    @user2 = TaggableUser.new
-    lambda{
-      @user.tag(@taggable, :with => 'ruby, scheme', :on => :tags)
-      @user2.tag(@taggable, :with => 'java, python, lisp, ruby', :on => :tags)
-    }.should change(ActsAsTaggableOn::Tagging, :count).by(6)
+  describe "Tagger Method Generation" do
+    before(:each) do
+      @tagger = TaggableUser.new()
+    end
 
-    [@user, @user2, @taggable].each(&:reload)
-
-    @user.owned_tags.map(&:name).sort.should == %w(ruby scheme).sort
-    @user2.owned_tags.map(&:name).sort.should == %w(java python lisp ruby).sort
+    it "should add #is_tagger? query method to the class-side" do
+      TaggableUser.should respond_to(:is_tagger?)
+    end
     
-    @taggable.tags_from(@user).sort.should == %w(ruby scheme).sort
-    @taggable.tags_from(@user2).sort.should == %w(java lisp python ruby).sort
+    it "should return true from the class-side #is_tagger?" do
+      TaggableUser.is_tagger?.should be_true
+    end
     
-    @taggable.all_tags_list.sort.should == %w(ruby scheme java python lisp).sort
-    @taggable.all_tags_on(:tags).size.should == 5
+    it "should return false from the base #is_tagger?" do
+      ActiveRecord::Base.is_tagger?.should be_false
+    end
+    
+    it "should add #is_tagger? query method to the singleton" do
+      @tagger.should respond_to(:is_tagger?)
+    end
+    
+    it "should add #tag method on the instance-side" do
+      @tagger.should respond_to(:tag)
+    end
+    
+    it "should generate an association for #owned_taggings and #owned_tags" do
+      @tagger.should respond_to(:owned_taggings, :owned_tags)
+    end
   end
   
-  it "should not lose tags from different taggers" do
-    @user2 = TaggableUser.create
-    @user2.tag(@taggable, :with => 'java, python, lisp, ruby', :on => :tags)
-    @user.tag(@taggable, :with => 'ruby, scheme', :on => :tags)  
-    
-    lambda {
-      @user2.tag(@taggable, :with => 'java, python, lisp', :on => :tags)
-    }.should change(ActsAsTaggableOn::Tagging, :count).by(-1)
+  describe "#tag" do
+    context 'when called with a non-existent tag context' do
+      before(:each) do
+        @tagger = TaggableUser.new()
+        @taggable = TaggableModel.new(:name=>"Richard Prior")
+      end
+      
+      it "should by default not throw an exception " do
+        @taggable.tag_list_on(:foo).should be_empty
+        lambda {
+          @tagger.tag(@taggable, :with=>'this, and, that', :on=>:foo)
+        }.should_not raise_error
+      end
+      
+      it 'should by default create the tag context on-the-fly' do
+        @taggable.tag_list_on(:here_ond_now).should be_empty
+        @tagger.tag(@taggable, :with=>'that', :on => :here_ond_now)
+        @taggable.tag_list_on(:here_ond_now).should_not include('that')
+        @taggable.all_tags_list_on(:here_ond_now).should include('that')
+      end
+      
+      it "should show all the tag list when both public and owned tags exist" do
+        @taggable.tag_list = 'ruby, python'
+        @tagger.tag(@taggable, :with => 'java, lisp', :on => :tags)
+        @taggable.all_tags_on(:tags).map(&:name).sort.should == %w(ruby python java lisp).sort
+      end
+      
+      it "should not add owned tags to the common list" do
+        @taggable.tag_list = 'ruby, python'
+        @tagger.tag(@taggable, :with => 'java, lisp', :on => :tags)
+        @taggable.tag_list.should == %w(ruby python)
+        @tagger.tag(@taggable, :with => '', :on => :tags)
+        @taggable.tag_list.should == %w(ruby python)
+      end
+      
+      it "should throw an exception when the default is over-ridden" do
+        @taggable.tag_list_on(:foo_boo).should be_empty
+        lambda {
+          @tagger.tag(@taggable, :with=>'this, and, that', :on=>:foo_boo, :force=>false)
+        }.should raise_error        
+      end
 
-    [@user, @user2, @taggable].each(&:reload)
+      it "should not create the tag context on-the-fly when the default is over-ridden" do
+        @taggable.tag_list_on(:foo_boo).should be_empty
+        @tagger.tag(@taggable, :with=>'this, and, that', :on=>:foo_boo, :force=>false) rescue
+        @taggable.tag_list_on(:foo_boo).should be_empty
+      end
+    end
     
-    @taggable.tags_from(@user).sort.should == %w(ruby scheme).sort
-    @taggable.tags_from(@user2).sort.should == %w(java python lisp).sort
-    
-    @taggable.all_tags_list.sort.should == %w(ruby scheme java python lisp).sort
-    @taggable.all_tags_on(:tags).length.should == 5
+    describe "when called by multiple tagger's" do
+      before(:each) do
+        @user_x = TaggableUser.create(:name => "User X")
+        @user_y = TaggableUser.create(:name => "User Y")
+        @taggable = TaggableModel.create(:name => 'acts_as_taggable_on', :tag_list => 'plugin')
+        
+        @user_x.tag(@taggable, :with => 'ruby, rails',  :on => :tags)
+        @user_y.tag(@taggable, :with => 'ruby, plugin', :on => :tags)
+
+        @user_y.tag(@taggable, :with => '', :on => :tags)
+        @user_y.tag(@taggable, :with => '', :on => :tags)
+      end
+      
+      it "should delete owned tags" do        
+        @user_y.owned_tags.should == []
+      end
+      
+      it "should not delete other taggers tags" do
+        @user_x.owned_tags.should have(2).items
+      end
+      
+      it "should not delete original tags" do
+        @taggable.all_tags_list_on(:tags).should include('plugin')
+      end
+    end
   end
 
-  it "should not lose tags" do
-    @user2 = TaggableUser.create
-    
-    @user.tag(@taggable, :with => 'awesome', :on => :tags)
-    @user2.tag(@taggable, :with => 'awesome, epic', :on => :tags)
-
-    lambda {
-      @user2.tag(@taggable, :with => 'epic', :on => :tags)
-    }.should change(ActsAsTaggableOn::Tagging, :count).by(-1)
-
-    @taggable.reload  
-    @taggable.all_tags_list.should include('awesome')
-    @taggable.all_tags_list.should include('epic')
-  end
-  
-  it "should not lose tags" do
-    @taggable.update_attributes(:tag_list => 'ruby')
-    @user.tag(@taggable, :with => 'ruby, scheme', :on => :tags)
-    
-    [@taggable, @user].each(&:reload)
-    @taggable.tag_list.should == %w(ruby)
-    @taggable.all_tags_list.sort.should == %w(ruby scheme).sort
-    
-    lambda {
-      @taggable.update_attributes(:tag_list => "")
-    }.should change(ActsAsTaggableOn::Tagging, :count).by(-1)
-    
-    @taggable.tag_list.should == []
-    @taggable.all_tags_list.sort.should == %w(ruby scheme).sort
-  end
-
-  it "is tagger" do
-    @user.is_tagger?.should(be_true)
-  end  
 end
