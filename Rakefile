@@ -1,13 +1,18 @@
 require 'rubygems'
 require 'bundler'
+
+require 'spec/version'
+require 'spec/rake/spectask'
+require 'spec/ruby'
+
 Bundler.setup :default, :development
 
 desc 'Default: run specs'
 task :default => :spec  
 
-require 'rspec/core/rake_task'
-RSpec::Core::RakeTask.new do |t|
-  t.pattern = "spec/**/*_spec.rb"
+desc "Run all specs"
+Spec::Rake::SpecTask.new(:spec) do |t|
+  t.spec_files = FileList['spec/**/*_spec.rb']
 end
 
 Bundler::GemHelper.install_tasks
