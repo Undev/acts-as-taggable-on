@@ -51,11 +51,11 @@ module ActsAsTaggableOn
           end
           
           include ::ActsAsTaggableOn::Utils        
-          include ActsAsTaggableOn::Taggable::Core
-          include ActsAsTaggableOn::Taggable::Collection
-          include ActsAsTaggableOn::Taggable::Cache
-          include ActsAsTaggableOn::Taggable::Ownership
-          include ActsAsTaggableOn::Taggable::Related
+          include ::ActsAsTaggableOn::Taggable::Core
+          include ::ActsAsTaggableOn::Taggable::Collection
+          include ::ActsAsTaggableOn::Taggable::Cache
+          include ::ActsAsTaggableOn::Taggable::Ownership
+          include ::ActsAsTaggableOn::Taggable::Related
         end
       end
     end
