@@ -2,8 +2,8 @@ module ActsAsTaggableOn
   module Utils
     def self.included(base)
       
-      base.send :include, ActsAsTaggableOn::Utils::OverallMethods
-      base.extend ActsAsTaggableOn::Utils::OverallMethods      
+      base.send :include, ::ActsAsTaggableOn::Utils::OverallMethods
+      base.extend ::ActsAsTaggableOn::Utils::OverallMethods      
     end
 
     module OverallMethods

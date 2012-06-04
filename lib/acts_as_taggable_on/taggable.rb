@@ -50,7 +50,7 @@ module ActsAsTaggableOn
             true
           end
           
-          include ActsAsTaggableOn::Utils        
+          include ::ActsAsTaggableOn::Utils        
           include ActsAsTaggableOn::Taggable::Core
           include ActsAsTaggableOn::Taggable::Collection
           include ActsAsTaggableOn::Taggable::Cache
